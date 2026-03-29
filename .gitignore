@@ -42,7 +42,7 @@ htmlcov/
 .nox/
 .coverage
 .coverage.*
-.cache
+#.cache
 nosetests.xml
 coverage.xml
 *.cover
@@ -214,3 +214,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# cache
+.cache.sqlite
+
+# virtual / temp
+.virtual_documents/
