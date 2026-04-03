@@ -1,24 +1,30 @@
 # Tatry Weather
 
-Projekt analityczno-pogodowy poświęcony warunkom atmosferycznym w rejonie Tatr. Repozytorium łączy pobieranie danych pogodowych z zewnętrznych API, zapis danych do plików oraz eksploracyjną analizę danych historycznych w notebookach Jupyter.
+Projekt pogodowy dla Tatr oparty o dane z API, notebooki analityczne oraz lokalną bazę `SQLite`.
 
 ## Opis
 
-Celem projektu jest budowa aplikacji pogodowej dla Tatr, która w czytelny sposób pokaże aktualne warunki, dane historyczne i dalsze możliwości analizy. Obecnie repozytorium koncentruje się na dwóch obszarach:
+Repozytorium łączy trzy warstwy:
 
-- pobieraniu danych pogodowych z API,
-- analizie historycznych danych pogodowych dla regionu Tatr.
+- pobieranie danych pogodowych z zewnętrznych API,
+- zapis danych do plików `CSV` i `JSON`,
+- zapis aktualnych danych z pliku `data/weather_history.csv` do bazy `SQLite`.
 
-Projekt stanowi bazę pod dalszy rozwój aplikacji, w tym dashboardu w Streamlit.
+W projekcie występują dwa główne zbiory danych:
+
+- `data/weather_history.csv` - aktualne dane pogodowe z siatki punktów w regionie Tatr,
+- `data/weather_history_for_eda.csv` - osobny zbiór danych historycznych używany do analizy w notebooku EDA.
+
+Baza `database/weather.db` jest obecnie budowana na podstawie pliku `data/weather_history.csv`.
 
 ## Funkcje
 
 - pobieranie historycznych danych pogodowych z Meteostat przez RapidAPI,
 - pobieranie aktualnych danych pogodowych z OpenWeather,
-- zapis danych do formatów `CSV` i `JSON`,
-- eksploracyjna analiza danych pogodowych w notebooku `EDA.ipynb`,
-- analiza temperatury, wiatru i opadów dla wybranych lokalizacji w regionie Tatr,
-- przygotowana struktura danych pod dalszy rozwój aplikacji i warstwy wizualnej.
+- pobieranie prognozy i zapis do `JSON`,
+- zapis aktualnych danych do `SQLite`,
+- odczyt danych z bazy w notebooku,
+- eksploracyjna analiza danych historycznych w notebooku `EDA.ipynb`.
 
 ## Struktura projektu
 
@@ -30,6 +36,15 @@ tatry-weather/
 │   ├── weather_history.csv
 │   ├── weather_history_for_eda.csv
 │   └── json/
+├── database/
+│   ├── weather.db
+│   └── schema/
+├── notebooks/
+│   └── SQLite_DB.ipynb
+├── scripts/
+│   ├── api_refresh.py
+│   ├── import_weather_history.py
+│   └── weather_db.py
 ├── pyproject.toml
 └── uv.lock
 ```
@@ -39,7 +54,7 @@ tatry-weather/
 ### Wymagania
 
 - Python `3.13+`
-- `uv` lub standardowe środowisko wirtualne dla Pythona
+- `uv`
 
 ### 1. Sklonuj repozytorium
 
@@ -50,15 +65,11 @@ cd tatry-weather
 
 ### 2. Zainstaluj zależności
 
-Rekomendowana opcja z użyciem `uv`:
-
 ```bash
 uv sync
 ```
 
-### 3. Skonfiguruj zmienne środowiskowe
-
-Utwórz plik `.env` w katalogu głównym projektu i dodaj:
+### 3. Skonfiguruj `.env`
 
 ```env
 RAPIDAPI_KEY=your_rapidapi_key
@@ -67,57 +78,75 @@ OPENWEATHERAPI_KEY=your_openweather_key
 
 ## Uruchomienie
 
-Projekt jest obecnie rozwijany głównie w formie notebooków Jupyter.
-
-### Uruchomienie środowiska Jupyter
+### Notebooki
 
 ```bash
 uv run jupyter lab
 ```
 
-Następnie otwórz:
+Notebooki:
 
-- `API .ipynb` - pobieranie danych z API i zapis wyników,
-- `EDA.ipynb` - analiza eksploracyjna danych historycznych.
+- `API .ipynb` - pobieranie danych z API,
+- `EDA.ipynb` - analiza historyczna,
+- `notebooks/SQLite_DB.ipynb` - odczyt danych z `database/weather.db`.
+
+### Skrypty
+
+Utworzenie bazy:
+
+```bash
+python scripts\weather_db.py
+```
+
+Import `data/weather_history.csv` do SQLite:
+
+```bash
+python scripts\import_weather_history.py
+```
+
+Odświeżenie danych z API:
+
+```bash
+uv run python scripts\api_refresh.py --mode current
+```
+
+Odświeżenie danych z API i import do bazy:
+
+```bash
+uv run python scripts\api_refresh.py --mode current --import-to-db
+```
+
+## Baza danych
+
+Aktualna tabela `weather_history` w `database/weather.db` zawiera kolumny:
+
+- `temp`
+- `feels_like`
+- `pressure`
+- `humidity`
+- `pm10`
+- `lat`
+- `lon`
+- `download_timestamp`
+- `created_at`
+
+Schemat znajduje się w:
+
+- `database/schema/create_weather_history.sql`
 
 ## Work in Progress
 
-Projekt jest w trakcie rozwoju. Aktualny zakres obejmuje:
+Projekt jest nadal rozwijany. Aktualnie trwają prace nad:
 
-- integrację z zewnętrznymi źródłami danych pogodowych,
-- zapis i porządkowanie danych wejściowych,
-- analizę historycznych danych pogodowych dla regionu Tatr,
-- przygotowanie podstaw pod warstwę prezentacyjną.
-
-Najbliższe kierunki rozwoju:
-
-- uporządkowanie pipeline'u pobierania danych,
-- dodanie skryptów uruchamianych poza notebookami,
-- rozszerzenie analizy o kolejne wskaźniki pogodowe,
-- budowa dashboardu do prezentacji wyników.
+- uporządkowaniem pipeline'u danych,
+- dalszą integracją warstwy bazy danych,
+- rozwojem dashboardu prezentującego dane pogodowe.
 
 ## Planowany dashboard w Streamlit
 
-W kolejnym etapie projektu planowane jest przygotowanie interaktywnego dashboardu w `Streamlit`, który pozwoli na:
+W kolejnym etapie projektu planowany jest dashboard w `Streamlit`, który pokaże:
 
-- podgląd aktualnej pogody w wybranych punktach Tatr,
-- prezentację danych historycznych na wykresach,
-- porównywanie lokalizacji i warunków pogodowych,
-- filtrowanie danych po dacie, parametrze i obszarze,
-- udostępnienie projektu w bardziej przystępnej formie niż notebooki.
-
-Docelowo dashboard ma pełnić rolę lekkiej aplikacji analitycznej i prezentacyjnej dla danych pogodowych związanych z Tatrami.
-
-## Technologie
-
-- Python
-- JupyterLab
-- pandas
-- matplotlib
-- seaborn
-- tqdm
-- python-dotenv
-
-## Status
-
-Repozytorium przedstawia aktualny etap budowy aplikacji pogodowej dla Tatr: od pozyskiwania danych, przez ich zapis, po wstępną analizę i przygotowanie pod dashboard.
+- aktualną pogodę na obszarze Tatr,
+- mapę punktów siatki pogodowej,
+- podgląd parametrów takich jak temperatura, wilgotność i PM10,
+- prostą eksplorację danych historycznych i bieżących.
