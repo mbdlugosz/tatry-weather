@@ -166,6 +166,7 @@ def get_air_pollution(lat: float, lon: float, openweather_key: str) -> float | N
 def refresh_current(openweather_key: str, *, grid_size: int) -> Path:
     latitudes, longitudes = get_latitudes_and_longitudes(grid_size)
     dfs: list[pd.DataFrame] = []
+    batch_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     for lat in tqdm(latitudes, desc="Latitudes"):
         for lon in longitudes:
@@ -174,7 +175,7 @@ def refresh_current(openweather_key: str, *, grid_size: int) -> Path:
             df["pm10"] = get_air_pollution(float(lat), float(lon), openweather_key)
             df["lat"] = float(lat)
             df["lon"] = float(lon)
-            df["download_timestamp"] = datetime.now().strftime("%Y%m%d_%H%M%S")
+            df["download_timestamp"] = batch_timestamp
             dfs.append(df)
 
     df_api_openweather = pd.concat(dfs, ignore_index=True)

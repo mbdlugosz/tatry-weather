@@ -20,33 +20,27 @@ configure_page("Dane historyczne")
 
 render_hero(
     "Dane historyczne",
-    "Widok pomiarow zapisanych w bazie SQLite. Wybierz paczke czasowa i parametr, "
-    "aby przeanalizowac rozklad warunkow pogodowych oraz poziomu PM10 na siatce punktow.",
+    "Widok zapisanych pomiarow z pliku weather_history.csv. "
+    "Ta strona korzysta z tej samej siatki wspolrzednych co prognoza.",
 )
 
 historical_df = load_historical_data()
 if historical_df.empty:
-    st.warning("Brak danych historycznych w aktualnym obszarze. Odswiez dane i zaimportuj je do SQLite.")
+    st.warning("Brak danych w weather_history.csv. Odswiez dane i uruchom dashboard ponownie.")
     st.stop()
 
-available_timestamps = (
-    historical_df["download_timestamp"].dropna().sort_values(ascending=False).unique().tolist()
-)
+timestamp_min = historical_df["download_timestamp"].min()
+timestamp_max = historical_df["download_timestamp"].max()
 
 with st.sidebar:
     st.header("Filtry")
-    selected_timestamp = st.selectbox(
-        "Paczka pomiarowa",
-        available_timestamps,
-        format_func=lambda value: pd.Timestamp(value).strftime("%Y-%m-%d %H:%M:%S"),
-    )
     selected_metric = st.selectbox(
         "Parametr",
-        options=list(HISTORICAL_LABELS),
+        options=["temp", "feels_like", "pressure", "humidity", "pm10"],
         format_func=lambda key: HISTORICAL_LABELS[key],
     )
 
-filtered_df = historical_df[historical_df["download_timestamp"] == selected_timestamp].copy()
+filtered_df = historical_df.copy()
 filtered_df = filtered_df.dropna(subset=[selected_metric, "lat", "lon"])
 
 col1, col2, col3, col4 = st.columns(4)
@@ -55,7 +49,14 @@ with col1:
 with col2:
     render_metric("Parametr", HISTORICAL_LABELS[selected_metric])
 with col3:
-    render_metric("Znacznik czasu", pd.Timestamp(selected_timestamp).strftime("%Y-%m-%d %H:%M:%S"))
+    render_metric(
+        "Zakres czasu",
+        (
+            pd.Timestamp(timestamp_min).strftime("%Y-%m-%d %H:%M:%S")
+            if timestamp_min == timestamp_max
+            else f"{pd.Timestamp(timestamp_min).strftime('%H:%M:%S')} - {pd.Timestamp(timestamp_max).strftime('%H:%M:%S')}"
+        ),
+    )
 with col4:
     render_metric("Srednia", format_value(float(filtered_df[selected_metric].mean())))
 
@@ -79,8 +80,8 @@ with info_col:
     render_metric("Mediana", format_value(float(filtered_df[selected_metric].median())))
     render_panel(
         "Interpretacja",
-        "Markery pokazują dokładne położenie punktów siatki. Heatmapa ułatwia szybkie odczytanie obszarów "
-        "o wyższych i niższych wartościach wybranego parametru.",
+        "Ta strona czyta bezposrednio weather_history.csv, dlatego wspolrzedne powinny odpowiadac "
+        "dokladnie tej samej siatce co w plikach prognozy.",
     )
 
 st.subheader("Tabela rekordow")

@@ -11,17 +11,24 @@ import streamlit as st
 from folium import Element
 from folium.plugins import HeatMap
 
-from spatial_config import LAT_MAX, LAT_MIN, LON_MAX, LON_MIN, is_inside_bounds
+from spatial_config import LAT_MAX, LAT_MIN, LON_MAX, LON_MIN, STATION_COORDINATES, is_inside_bounds
 
 
 BASE_DIR = Path(__file__).resolve().parent
 DATABASE_PATH = BASE_DIR / "database" / "weather.db"
 FORECAST_DIR = BASE_DIR / "data" / "json"
+WEATHER_HISTORY_CSV = BASE_DIR / "data" / "weather_history.csv"
+HISTORICAL_STATION_CSV = BASE_DIR / "data" / "weather_history_for_eda.csv"
 
 HISTORICAL_LABELS = {
+    "avg_temp": "Srednia temperatura",
+    "min_temp": "Minimalna temperatura",
+    "max_temp": "Maksymalna temperatura",
+    "pressure": "Cisnienie",
+    "avg_wind_speed_km/h": "Srednia predkosc wiatru",
+    "max_wind_speed": "Maksymalna predkosc wiatru",
     "temp": "Temperatura",
     "feels_like": "Temperatura odczuwalna",
-    "pressure": "Cisnienie",
     "humidity": "Wilgotnosc",
     "pm10": "PM10",
 }
@@ -96,39 +103,33 @@ def configure_page(title: str) -> None:
 
 @st.cache_data(show_spinner=False)
 def load_historical_data(db_path: Path = DATABASE_PATH) -> pd.DataFrame:
-    if not db_path.exists():
+    if not WEATHER_HISTORY_CSV.exists():
         return pd.DataFrame()
 
-    connection = sqlite3.connect(db_path)
-    try:
-        query = """
-            SELECT
-                id,
-                temp,
-                feels_like,
-                pressure,
-                humidity,
-                pm10,
-                lat,
-                lon,
-                download_timestamp,
-                created_at
-            FROM weather_history
-            ORDER BY download_timestamp DESC, id DESC
-        """
-        df = pd.read_sql_query(query, connection)
-    finally:
-        connection.close()
-
+    df = pd.read_csv(WEATHER_HISTORY_CSV)
     if df.empty:
         return df
 
     df["download_timestamp"] = pd.to_datetime(
         df["download_timestamp"], format="%Y%m%d_%H%M%S", errors="coerce"
     )
-    df["created_at"] = pd.to_datetime(df["created_at"], errors="coerce")
     mask = df.apply(lambda row: is_inside_bounds(float(row["lat"]), float(row["lon"])), axis=1)
     return df.loc[mask].reset_index(drop=True)
+
+
+@st.cache_data(show_spinner=False)
+def load_station_history(csv_path: Path = HISTORICAL_STATION_CSV) -> pd.DataFrame:
+    if not csv_path.exists():
+        return pd.DataFrame()
+
+    df = pd.read_csv(csv_path)
+    if df.empty:
+        return df
+
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df["lat"] = df["station_name"].map(lambda name: STATION_COORDINATES.get(name, {}).get("lat"))
+    df["lon"] = df["station_name"].map(lambda name: STATION_COORDINATES.get(name, {}).get("lon"))
+    return df.dropna(subset=["date", "lat", "lon"]).reset_index(drop=True)
 
 
 @st.cache_data(show_spinner=False)
@@ -311,6 +312,69 @@ def build_heatmap(
     """
     weather_map.get_root().html.add_child(Element(legend_html))
     return weather_map
+
+
+def build_station_map(
+    df: pd.DataFrame,
+    *,
+    value_column: str,
+    legend_label: str,
+) -> folium.Map:
+    center, bounds = get_bounds(df)
+    vmin, vmax = get_value_range(df, value_column)
+    station_map = folium.Map(
+        location=center,
+        zoom_start=10,
+        tiles="CartoDB Positron",
+        control_scale=True,
+    )
+
+    HeatMap(
+        data=df[["lat", "lon", value_column]].dropna().values.tolist(),
+        radius=35,
+        blur=28,
+        min_opacity=0.18,
+        max_zoom=11,
+        gradient={
+            0.1: "#28536b",
+            0.35: "#2a9d8f",
+            0.6: "#e9c46a",
+            0.8: "#f4a261",
+            1.0: "#d1495b",
+        },
+    ).add_to(station_map)
+
+    for row in df[["station_name", "lat", "lon", value_column]].dropna().itertuples(index=False):
+        station_name, lat, lon, value = row
+        folium.CircleMarker(
+            location=[float(lat), float(lon)],
+            radius=10,
+            color="#17313b",
+            weight=1.4,
+            fill=True,
+            fill_color=value_to_color(float(value), vmin=vmin, vmax=vmax),
+            fill_opacity=0.98,
+            tooltip=(
+                f"stacja: {station_name}<br>"
+                f"lat: {float(lat):.4f}<br>"
+                f"lon: {float(lon):.4f}<br>"
+                f"{legend_label}: {float(value):.2f}"
+            ),
+        ).add_to(station_map)
+        folium.Marker(
+            location=[float(lat), float(lon)],
+            icon=folium.DivIcon(
+                html=(
+                    "<div style='font-size:12px;font-weight:700;color:#17313b;"
+                    "background:rgba(251,252,251,0.88);padding:2px 6px;border-radius:8px;"
+                    "border:1px solid #d8e2df;white-space:nowrap;'>"
+                    f"{station_name}</div>"
+                )
+            ),
+        ).add_to(station_map)
+
+    station_map.fit_bounds(bounds)
+    return station_map
 
 
 def render_folium_map(map_object: folium.Map, *, height: int = 640) -> None:
