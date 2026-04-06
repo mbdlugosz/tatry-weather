@@ -185,6 +185,16 @@ def refresh_current(openweather_key: str, *, grid_size: int) -> Path:
         errors="ignore",
     ).reset_index(drop=True)
 
+    if WEATHER_HISTORY_CSV.exists():
+        existing_df = pd.read_csv(WEATHER_HISTORY_CSV)
+        df_api_openweather = pd.concat([existing_df, df_api_openweather], ignore_index=True)
+        df_api_openweather = df_api_openweather.drop_duplicates(
+            subset=["lat", "lon", "download_timestamp"], keep="last"
+        )
+
+    df_api_openweather = df_api_openweather.sort_values(
+        by=["download_timestamp", "lat", "lon"]
+    ).reset_index(drop=True)
     df_api_openweather.to_csv(WEATHER_HISTORY_CSV, index=False)
     return WEATHER_HISTORY_CSV
 
