@@ -4,6 +4,7 @@ import pandas as pd
 import streamlit as st
 
 from dashboard_utils import (
+    attach_forecast_point_metadata,
     build_heatmap,
     configure_page,
     format_value,
@@ -28,6 +29,8 @@ forecast_df, source_path = load_latest_forecast()
 if forecast_df.empty or source_path is None:
     st.warning("Brak prognozy w aktualnym obszarze. Odswiez dane forecast i uruchom dashboard ponownie.")
     st.stop()
+
+forecast_df = attach_forecast_point_metadata(forecast_df)
 
 side_col, layout_col = st.columns([0.78, 2.62], vertical_alignment="top")
 with side_col:

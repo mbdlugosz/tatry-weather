@@ -6,4 +6,4 @@ from dashboard_utils import configure_page
 
 
 configure_page("Tatry Weather Dashboard")
-st.switch_page("pages/1_Dane_historyczne.py")
+st.switch_page("pages/0_Ocena_ryzyka.py")

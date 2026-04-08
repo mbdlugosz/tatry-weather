@@ -369,7 +369,16 @@ def render_app_header(description: str) -> None:
 
 def render_top_nav(active_page: str) -> None:
     st.markdown('<div class="top-nav-label">Nawigacja</div>', unsafe_allow_html=True)
-    history_col, forecast_col, export_col = st.columns(3)
+    risk_col, history_col, forecast_col, export_col = st.columns(4)
+
+    with risk_col:
+        st.page_link(
+            "pages/0_Ocena_ryzyka.py",
+            label="Ocena ryzyka",
+            icon=":material/warning:",
+            disabled=active_page == "risk",
+            use_container_width=True,
+        )
 
     with history_col:
         st.page_link(
@@ -461,6 +470,114 @@ def value_to_color(value: float, *, vmin: float, vmax: float) -> str:
     return palette[index]
 
 
+def _get_band_label(ratio: float, *, low_label: str, middle_label: str, high_label: str) -> str:
+    if ratio <= 1 / 3:
+        return low_label
+    if ratio >= 2 / 3:
+        return high_label
+    return middle_label
+
+
+def _get_nearest_station_name(lat: float, lon: float) -> str:
+    return min(
+        STATION_COORDINATES,
+        key=lambda station_name: (
+            (lat - STATION_COORDINATES[station_name]["lat"]) ** 2
+            + (lon - STATION_COORDINATES[station_name]["lon"]) ** 2
+        ),
+    )
+
+
+def build_forecast_point_catalog(forecast_df: pd.DataFrame) -> pd.DataFrame:
+    if forecast_df.empty:
+        return pd.DataFrame(
+            columns=[
+                "point_id",
+                "point_label",
+                "point_display",
+                "point_description",
+                "lat",
+                "lon",
+                "row_index",
+                "col_index",
+            ]
+        )
+
+    points_df = (
+        forecast_df[["lat", "lon"]]
+        .drop_duplicates()
+        .sort_values(["lat", "lon"], ascending=[False, True])
+        .reset_index(drop=True)
+    )
+    latitudes = sorted(points_df["lat"].unique(), reverse=True)
+    longitudes = sorted(points_df["lon"].unique())
+    lat_lookup = {value: index for index, value in enumerate(latitudes)}
+    lon_lookup = {value: index for index, value in enumerate(longitudes)}
+
+    rows: list[dict] = []
+    total_points = len(points_df)
+    for point_number, row in enumerate(points_df.itertuples(index=False), start=1):
+        lat = float(row.lat)
+        lon = float(row.lon)
+        lat_ratio = 0.5 if LAT_MAX == LAT_MIN else (lat - LAT_MIN) / (LAT_MAX - LAT_MIN)
+        lon_ratio = 0.5 if LON_MAX == LON_MIN else (lon - LON_MIN) / (LON_MAX - LON_MIN)
+        vertical = _get_band_label(
+            lat_ratio,
+            low_label="poludniowa",
+            middle_label="centralna",
+            high_label="polnocna",
+        )
+        horizontal = _get_band_label(
+            lon_ratio,
+            low_label="zachodnia",
+            middle_label="centralna",
+            high_label="wschodnia",
+        )
+        if vertical == "centralna" and horizontal == "centralna":
+            area_label = "centralna czesc obszaru"
+        elif vertical == "centralna":
+            area_label = f"{horizontal} czesc obszaru"
+        elif horizontal == "centralna":
+            area_label = f"{vertical} czesc obszaru"
+        else:
+            area_label = f"{vertical[:-1]}o-{horizontal} czesc obszaru"
+
+        nearest_station = _get_nearest_station_name(lat, lon)
+        point_id = f"P{point_number:03d}"
+        point_label = f"{point_id} ({lat:.4f}, {lon:.4f})"
+        point_description = (
+            f"{area_label}, najblizej punktu odniesienia {nearest_station}, "
+            f"wiersz {lat_lookup[lat] + 1} z {len(latitudes)}, kolumna {lon_lookup[lon] + 1} z {len(longitudes)}"
+        )
+        point_display = (
+            f"{point_id} | {area_label} | najblizej: {nearest_station} | "
+            f"lat {lat:.4f}, lon {lon:.4f}"
+        )
+        rows.append(
+            {
+                "point_id": point_id,
+                "point_label": point_label,
+                "point_display": point_display,
+                "point_description": point_description,
+                "lat": lat,
+                "lon": lon,
+                "row_index": lat_lookup[lat] + 1,
+                "col_index": lon_lookup[lon] + 1,
+                "total_points": total_points,
+            }
+        )
+
+    return pd.DataFrame(rows)
+
+
+def attach_forecast_point_metadata(forecast_df: pd.DataFrame) -> pd.DataFrame:
+    if forecast_df.empty:
+        return forecast_df.copy()
+
+    point_catalog = build_forecast_point_catalog(forecast_df)
+    return forecast_df.merge(point_catalog, on=["lat", "lon"], how="left")
+
+
 def build_heatmap(
     df: pd.DataFrame,
     *,
@@ -492,8 +609,15 @@ def build_heatmap(
         },
     ).add_to(weather_map)
 
-    for row in df[["lat", "lon", value_column]].dropna().itertuples(index=False):
+    marker_columns = ["lat", "lon", value_column]
+    has_point_label = "point_label" in df.columns
+    if has_point_label:
+        marker_columns.append("point_label")
+
+    for row in df[marker_columns].dropna().itertuples(index=False):
         lat, lon, value = float(row[0]), float(row[1]), float(row[2])
+        point_label = row[3] if has_point_label else None
+        tooltip_prefix = f"{point_label}<br>" if point_label else ""
         folium.CircleMarker(
             location=[lat, lon],
             radius=7,
@@ -502,7 +626,7 @@ def build_heatmap(
             fill=True,
             fill_color=value_to_color(value, vmin=vmin, vmax=vmax),
             fill_opacity=0.95,
-            tooltip=f"lat: {lat:.6f}<br>lon: {lon:.6f}<br>{legend_label}: {value:.2f}",
+            tooltip=f"{tooltip_prefix}lat: {lat:.6f}<br>lon: {lon:.6f}<br>{legend_label}: {value:.2f}",
         ).add_to(weather_map)
 
     folium.Rectangle(
