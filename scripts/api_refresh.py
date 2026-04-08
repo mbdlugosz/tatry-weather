@@ -163,6 +163,29 @@ def get_air_pollution(lat: float, lon: float, openweather_key: str) -> float | N
     return data[0]["components"]["pm10"]
 
 
+def merge_weather_history(new_data: pd.DataFrame, csv_path: Path = WEATHER_HISTORY_CSV) -> pd.DataFrame:
+    if not csv_path.exists():
+        return new_data.sort_values(by=["download_timestamp", "lat", "lon"]).reset_index(drop=True)
+
+    existing_df = pd.read_csv(csv_path)
+    all_columns = list(dict.fromkeys([*existing_df.columns.tolist(), *new_data.columns.tolist()]))
+    existing_df = existing_df.reindex(columns=all_columns)
+    new_data = new_data.reindex(columns=all_columns)
+
+    merged_df = pd.concat([existing_df, new_data], ignore_index=True)
+    merged_df = merged_df.drop_duplicates(keep="last")
+    merged_df["download_timestamp_dt"] = pd.to_datetime(
+        merged_df["download_timestamp"],
+        format="%Y%m%d_%H%M%S",
+        errors="coerce",
+    )
+    merged_df = merged_df.sort_values(
+        by=["download_timestamp_dt", "lat", "lon"],
+        na_position="last",
+    ).drop(columns=["download_timestamp_dt"])
+    return merged_df.reset_index(drop=True)
+
+
 def refresh_current(openweather_key: str, *, grid_size: int) -> Path:
     latitudes, longitudes = get_latitudes_and_longitudes(grid_size)
     dfs: list[pd.DataFrame] = []
@@ -184,17 +207,7 @@ def refresh_current(openweather_key: str, *, grid_size: int) -> Path:
         axis=1,
         errors="ignore",
     ).reset_index(drop=True)
-
-    if WEATHER_HISTORY_CSV.exists():
-        existing_df = pd.read_csv(WEATHER_HISTORY_CSV)
-        df_api_openweather = pd.concat([existing_df, df_api_openweather], ignore_index=True)
-        df_api_openweather = df_api_openweather.drop_duplicates(
-            subset=["lat", "lon", "download_timestamp"], keep="last"
-        )
-
-    df_api_openweather = df_api_openweather.sort_values(
-        by=["download_timestamp", "lat", "lon"]
-    ).reset_index(drop=True)
+    df_api_openweather = merge_weather_history(df_api_openweather)
     df_api_openweather.to_csv(WEATHER_HISTORY_CSV, index=False)
     return WEATHER_HISTORY_CSV
 
