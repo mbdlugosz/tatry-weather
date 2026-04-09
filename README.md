@@ -1,152 +1,234 @@
-# Tatry Weather
+# Dashboard pogodowy Tatry
 
-Projekt pogodowy dla Tatr oparty o dane z API, notebooki analityczne oraz lokalną bazę `SQLite`.
+Projekt analityczno-aplikacyjny dla obszaru Tatr. Repozytorium laczy pobieranie danych pogodowych z API, zapis danych do plikow `CSV` i `JSON`, lokalna baze `SQLite`, notebooki analityczne oraz dashboard w `Streamlit`.
 
-## Opis
+Najwazniejsza czescia projektu jest obecnie dashboard, ktory pozwala:
 
-Repozytorium łączy trzy warstwy:
-
-- pobieranie danych pogodowych z zewnętrznych API,
-- zapis danych do plików `CSV` i `JSON`,
-- zapis aktualnych danych z pliku `data/weather_history.csv` do bazy `SQLite`.
-
-W projekcie występują dwa główne zbiory danych:
-
-- `data/weather_history.csv` - aktualne dane pogodowe z siatki punktów w regionie Tatr,
-- `data/weather_history_for_eda.csv` - osobny zbiór danych historycznych używany do analizy w notebooku EDA.
-
-Baza `database/weather.db` jest obecnie budowana na podstawie pliku `data/weather_history.csv`.
+- analizowac prognoze temperatur dla siatki punktow na obszarze Tatr,
+- oceniac ryzyko wyprawy dla wskazanej lokalizacji lub trasy,
+- wizualizowac trase i punkty siatki na mapie,
+- przegladac dane historyczne i forecast,
+- eksportowac dane do dalszej analizy.
 
 ## Funkcje
 
-- pobieranie historycznych danych pogodowych z Meteostat przez RapidAPI,
-- pobieranie aktualnych danych pogodowych z OpenWeather,
-- pobieranie prognozy i zapis do `JSON`,
-- zapis aktualnych danych do `SQLite`,
-- odczyt danych z bazy w notebooku,
-- eksploracyjna analiza danych historycznych w notebooku `EDA.ipynb`.
+### 1. Dashboard Streamlit
+
+Dashboard zawiera kilka widokow:
+
+- `Ocena ryzyka`
+- `Dane historyczne`
+- `Prognoza pogody`
+- `Eksport danych`
+
+W module oceny ryzyka uzytkownik moze wpisac:
+
+- pojedyncza lokalizacje, np. `Morskie Oko`,
+- trase, np. `z Zakopanego do Morskiego Oka`,
+- wpis z drobnymi literowkami lub odmieniona nazwa miejsca.
+
+Aplikacja:
+
+- rozpoznaje miejsca nalezace do obszaru Tatr,
+- wybiera najnowszy plik forecast z katalogu `data/json`,
+- dopasowuje punkty siatki prognozy do analizowanej lokalizacji lub trasy,
+- pokazuje trase na mapie,
+- generuje 24-godzinna ocene ryzyka przy pomocy modelu AI,
+- rysuje wykres temperatur dla punktow startowych, koncowych i posrednich.
+
+Jesli wpisana lokalizacja nie nalezy do Tatr albo nie zostanie rozpoznana, dashboard nie pokazuje oceny ryzyka ani wykresu.
+
+### 2. Dane historyczne
+
+Projekt pobiera dane historyczne dla wybranych stacji Meteostat i zapisuje je do pliku:
+
+- `data/weather_history_for_eda.csv`
+
+Te dane sa wykorzystywane glownie w notebookach i analizie eksploracyjnej.
+
+### 3. Dane biezace i forecast
+
+Projekt pobiera dane z OpenWeather dla siatki punktow w granicach zdefiniowanego obszaru Tatr:
+
+- dane biezace trafiaja do `data/weather_history.csv`,
+- forecast zapisywany jest do plikow `JSON` w `data/json/`.
+
+Rozdzielczosc siatki mozna kontrolowac parametrem `--grid-size`.
+
+### 4. SQLite
+
+Aktualne dane pogodowe moga byc importowane do lokalnej bazy:
+
+- `database/weather.db`
 
 ## Struktura projektu
 
 ```text
 tatry-weather/
-├── API .ipynb
-├── EDA.ipynb
-├── data/
-│   ├── weather_history.csv
-│   ├── weather_history_for_eda.csv
-│   └── json/
-├── database/
-│   ├── weather.db
-│   └── schema/
-├── notebooks/
-│   └── SQLite_DB.ipynb
-├── scripts/
-│   ├── api_refresh.py
-│   ├── import_weather_history.py
-│   └── weather_db.py
-├── pyproject.toml
-└── uv.lock
+|-- app.py
+|-- ai_risk.py
+|-- dashboard_utils.py
+|-- spatial_config.py
+|-- pages/
+|   |-- 0_Ocena_ryzyka.py
+|   |-- 1_Dane_historyczne.py
+|   |-- 2_Prognoza_pogody.py
+|   `-- 3_Eksport_danych.py
+|-- scripts/
+|   |-- api_refresh.py
+|   |-- import_weather_history.py
+|   `-- weather_db.py
+|-- data/
+|   |-- weather_history.csv
+|   |-- weather_history_for_eda.csv
+|   `-- json/
+|-- database/
+|   |-- weather.db
+|   `-- schema/
+|-- notebooks/
+|-- pyproject.toml
+`-- uv.lock
 ```
 
-## Instalacja
+## Technologie
 
-### Wymagania
+- Python 3.13+
+- Streamlit
+- Pandas
+- Folium
+- Altair
+- SQLite
+- OpenWeather API
+- Meteostat API przez RapidAPI
+- OpenRouter / OpenAI SDK do oceny ryzyka AI
+
+## Wymagania
 
 - Python `3.13+`
 - `uv`
 
-### 1. Sklonuj repozytorium
+## Instalacja
+
+### 1. Klonowanie repozytorium
 
 ```bash
 git clone https://github.com/mbdlugosz/tatry-weather.git
 cd tatry-weather
 ```
 
-### 2. Zainstaluj zależności
+### 2. Instalacja zaleznosci
 
 ```bash
 uv sync
 ```
 
-### 3. Skonfiguruj `.env`
+### 3. Konfiguracja `.env`
+
+Przyklad:
 
 ```env
 RAPIDAPI_KEY=your_rapidapi_key
 OPENWEATHERAPI_KEY=your_openweather_key
+OPENROUTER_API_KEY=your_openrouter_key
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+AI_RISK_MODEL=gpt-4o-mini
 ```
 
-## Uruchomienie
+Minimalnie:
 
-### Notebooki
+- `RAPIDAPI_KEY` jest potrzebny do danych historycznych,
+- `OPENWEATHERAPI_KEY` jest potrzebny do danych biezacych i forecast,
+- `OPENROUTER_API_KEY` jest potrzebny do oceny ryzyka AI.
+
+## Uruchomienie dashboardu
+
+```bash
+uv run streamlit run app.py
+```
+
+Po uruchomieniu aplikacja przekierowuje domyslnie do strony `Ocena ryzyka`.
+
+## Odswiezanie danych
+
+### Forecast
+
+```bash
+uv run python scripts/api_refresh.py --mode forecast
+```
+
+### Dane biezace
+
+```bash
+uv run python scripts/api_refresh.py --mode current
+```
+
+### Dane historyczne
+
+```bash
+uv run python scripts/api_refresh.py --mode history
+```
+
+### Wszystko naraz
+
+```bash
+uv run python scripts/api_refresh.py --mode all
+```
+
+### Zmiana gestosci siatki
+
+```bash
+uv run python scripts/api_refresh.py --mode forecast --grid-size 10
+```
+
+Im wiekszy `grid-size`, tym wiecej punktow analizowanych na mapie i dokladniejsze dopasowanie lokalizacji do siatki forecast.
+
+### Import danych do SQLite
+
+```bash
+uv run python scripts/api_refresh.py --mode current --import-to-db
+```
+
+Lub osobno:
+
+```bash
+uv run python scripts/import_weather_history.py
+```
+
+## Notebooki
+
+Notebooki mozna uruchomic przez:
 
 ```bash
 uv run jupyter lab
 ```
 
-Notebooki:
+Repozytorium zawiera m.in. materialy do:
 
-- `API .ipynb` - pobieranie danych z API,
-- `EDA.ipynb` - analiza historyczna,
-- `notebooks/SQLite_DB.ipynb` - odczyt danych z `database/weather.db`.
+- analizy EDA,
+- eksperymentow z API,
+- testowania odpowiedzi AI dla oceny ryzyka.
 
-### Skrypty
+## Jak dziala ocena ryzyka
 
-Utworzenie bazy:
+1. Dashboard laduje najnowszy plik forecast z `data/json`.
+2. Uzytkownik wpisuje lokalizacje albo trase.
+3. System probuje rozpoznac punkty nalezace do Tatr.
+4. Dla rozpoznanej lokalizacji lub trasy wybierane sa najblizsze punkty siatki forecast.
+5. Model AI generuje ocene ryzyka: `safe`, `risky` albo `dangerous`.
+6. Wynik jest prezentowany jako opis po polsku wraz z mapa i wykresem temperatur dla 24 godzin.
 
-```bash
-python scripts\weather_db.py
-```
+## Ograniczenia
 
-Import `data/weather_history.csv` do SQLite:
+- Routing trasy jest przyblizony i opiera sie na lokalnym grafie polaczen oraz szablonach tras, a nie na pelnym silniku szlakowym.
+- Ocena ryzyka korzysta z punktow siatki forecast, a nie z idealnie dowolnych wspolrzednych w terenie.
+- Jakosc oceny zalezy od aktualnosci danych API i gestosci siatki forecast.
 
-```bash
-python scripts\import_weather_history.py
-```
+## Rozwoj projektu
 
-Odświeżenie danych z API:
+Planowane lub mozliwe dalsze rozszerzenia:
 
-```bash
-uv run python scripts\api_refresh.py --mode current
-```
-
-Odświeżenie danych z API i import do bazy:
-
-```bash
-uv run python scripts\api_refresh.py --mode current --import-to-db
-```
-
-## Baza danych
-
-Aktualna tabela `weather_history` w `database/weather.db` zawiera kolumny:
-
-- `temp`
-- `feels_like`
-- `pressure`
-- `humidity`
-- `pm10`
-- `lat`
-- `lon`
-- `download_timestamp`
-- `created_at`
-
-Schemat znajduje się w:
-
-- `database/schema/create_weather_history.sql`
-
-## Work in Progress
-
-Projekt jest nadal rozwijany. Aktualnie trwają prace nad:
-
-- uporządkowaniem pipeline'u danych,
-- dalszą integracją warstwy bazy danych,
-- rozwojem dashboardu prezentującego dane pogodowe.
-
-## Planowany dashboard w Streamlit
-
-W kolejnym etapie projektu planowany jest dashboard w `Streamlit`, który pokaże:
-
-- aktualną pogodę na obszarze Tatr,
-- mapę punktów siatki pogodowej,
-- podgląd parametrów takich jak temperatura, wilgotność i PM10,
-- prostą eksplorację danych historycznych i bieżących.
+- dodanie wag czasowych do odcinkow tras i wyboru najbardziej realistycznej trasy,
+- rozszerzenie katalogu punktow i tras tatrzanskich,
+- rozbudowa modelu ryzyka o wiecej parametrow pogodowych niz temperatura,
+- lepszy eksport danych i wynikow analiz,
+- dalsze dopracowanie warstwy prezentacyjnej dashboardu.
