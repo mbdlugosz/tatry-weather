@@ -5,6 +5,8 @@ import math
 import re
 import sqlite3
 import unicodedata
+from difflib import get_close_matches
+from difflib import SequenceMatcher
 from html import escape
 from io import BytesIO
 from pathlib import Path
@@ -288,6 +290,12 @@ def configure_page(title: str) -> None:
             margin-bottom: 0.38rem;
             line-height: 1.5;
         }
+        .risk-note-paragraph {
+            margin-top: 0.7rem;
+            color: #26414a;
+            line-height: 1.65;
+            font-size: 0.96rem;
+        }
         .risk-note-safe {
             background: #edf8f0;
             border-color: #b9ddc2;
@@ -455,7 +463,7 @@ def render_hero(title: str, description: str) -> None:
 
 
 def render_app_header(description: str) -> None:
-    st.title("Tatry Weather Dashboard")
+    st.title("Dashboard pogodowy Tatry")
     st.markdown(f'<div class="app-subtitle">{description}</div>', unsafe_allow_html=True)
 
 
@@ -554,6 +562,19 @@ def render_risk_note_detailed(risk_level: str, title: str, intro: str, details: 
     )
 
 
+def render_risk_note_prose(risk_level: str, title: str, body: str) -> None:
+    st.markdown(
+        f"""
+        <div class="risk-note risk-note-{escape(risk_level)}">
+            <div class="risk-note-level">Ocena ryzyka</div>
+            <div class="risk-note-title">{escape(title)}</div>
+            <div class="risk-note-paragraph">{escape(body)}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def get_bounds(df: pd.DataFrame) -> tuple[list[float], list[list[float]]]:
     if df.empty:
         center = [(LAT_MIN + LAT_MAX) / 2, (LON_MIN + LON_MAX) / 2]
@@ -627,11 +648,14 @@ def _resolve_named_place(text: str) -> dict | None:
     if not normalized_text:
         return None
 
+    alias_lookup: dict[str, tuple[str, dict]] = {}
     best_match: tuple[int, str, dict] | None = None
     for place_name, payload in TATRA_PLACE_COORDINATES.items():
         aliases = payload.get("aliases", [])
         for alias in aliases:
             normalized_alias = _normalize_location_text(alias)
+            if normalized_alias:
+                alias_lookup[normalized_alias] = (place_name, payload)
             if normalized_alias == normalized_text:
                 return {
                     "label": place_name,
@@ -653,7 +677,74 @@ def _resolve_named_place(text: str) -> dict | None:
                         },
                     )
 
+    fuzzy_match = get_close_matches(normalized_text, list(alias_lookup.keys()), n=1, cutoff=0.74)
+    if fuzzy_match:
+        place_name, payload = alias_lookup[fuzzy_match[0]]
+        return {
+            "label": place_name,
+            "lat": float(payload["lat"]),
+            "lon": float(payload["lon"]),
+            "source": "place_catalog",
+        }
+
     return None if best_match is None else best_match[2]
+
+
+def _extract_place_mentions(query: str) -> list[dict]:
+    normalized_query = _normalize_location_text(query)
+    if not normalized_query:
+        return []
+
+    tokens = [token for token in re.split(r"[^a-z0-9]+", normalized_query) if token]
+    if not tokens:
+        return []
+
+    alias_lookup: dict[str, dict] = {}
+    for place_name, payload in TATRA_PLACE_COORDINATES.items():
+        for alias in payload.get("aliases", []):
+            normalized_alias = _normalize_location_text(alias)
+            if normalized_alias:
+                alias_lookup[normalized_alias] = {
+                    "label": place_name,
+                    "lat": float(payload["lat"]),
+                    "lon": float(payload["lon"]),
+                    "source": "place_catalog",
+                }
+
+    matches: list[tuple[int, int, dict]] = []
+
+    for alias, payload in alias_lookup.items():
+        alias_tokens = alias.split()
+        alias_length = len(alias_tokens)
+        if alias in normalized_query:
+            position = normalized_query.find(alias)
+            matches.append((position, alias_length, payload))
+
+    max_ngram = min(5, len(tokens))
+    for size in range(max_ngram, 0, -1):
+        for start_index in range(len(tokens) - size + 1):
+            candidate = " ".join(tokens[start_index : start_index + size])
+            if candidate in alias_lookup:
+                continue
+            close_match = get_close_matches(candidate, list(alias_lookup.keys()), n=1, cutoff=0.72)
+            if not close_match:
+                continue
+            alias = close_match[0]
+            similarity = SequenceMatcher(None, candidate, alias).ratio()
+            if similarity < 0.72:
+                continue
+            matches.append((start_index, size, alias_lookup[alias]))
+
+    ordered_matches: list[dict] = []
+    seen_labels: set[str] = set()
+    for _, _, payload in sorted(matches, key=lambda item: (item[0], -item[1])):
+        label = payload["label"]
+        if label in seen_labels:
+            continue
+        seen_labels.add(label)
+        ordered_matches.append(payload)
+
+    return ordered_matches
 
 
 def _resolve_location_fragment(text: str) -> dict | None:
@@ -668,6 +759,7 @@ def resolve_map_request(query: str) -> dict:
     route_patterns = [
         r"^\s*(.+?)\s*->\s*(.+?)\s*$",
         r"^\s*(.+?)\s*[-–]\s*(.+?)\s*$",
+        r"^\s*trasa\s+z\s+(.+?)\s+do\s+(.+?)\s*$",
         r"^\s*(?:z|od)\s+(.+?)\s+do\s+(.+?)\s*$",
     ]
     for pattern in route_patterns:
@@ -686,6 +778,24 @@ def resolve_map_request(query: str) -> dict:
                     {**end_point, "role": "end", "input_label": end_label},
                 ],
             }
+        continue
+
+    mentioned_places = _extract_place_mentions(stripped_query)
+    if len(mentioned_places) >= 2:
+        start_point = mentioned_places[0]
+        end_point = mentioned_places[-1]
+        return {
+            "kind": "route",
+            "points": [
+                {**start_point, "role": "start", "input_label": start_point["label"]},
+                {**end_point, "role": "end", "input_label": end_point["label"]},
+            ],
+        }
+    if len(mentioned_places) == 1:
+        return {
+            "kind": "point",
+            "points": [{**mentioned_places[0], "role": "point", "input_label": mentioned_places[0]["label"]}],
+        }
 
     single_point = _resolve_location_fragment(stripped_query)
     if single_point:
