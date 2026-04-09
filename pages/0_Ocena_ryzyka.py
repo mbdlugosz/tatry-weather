@@ -240,6 +240,11 @@ with input_col:
             if not described_point.strip():
                 st.error("Wpisz opis lokalizacji lub trasy.")
                 st.stop()
+            current_map_request = resolve_map_request(described_point)
+            if current_map_request["kind"] == "unresolved":
+                st.session_state["risk_assessment_result"] = None
+                st.error("Wpisana lokalizacja nie nalezy do Tatr albo nie zostala rozpoznana.")
+                st.stop()
             payload = prepare_ai_point_payload(
                 forecast_df,
                 point_catalog_df,
@@ -260,9 +265,10 @@ assessment_data = st.session_state.get("risk_assessment_result")
 map_request = resolve_map_request(described_point)
 chart_points: list[dict] = []
 chart_series_frames: list[pd.DataFrame] = []
+show_assessment = map_request["kind"] != "unresolved"
 
 with content_col:
-    if assessment_data:
+    if assessment_data and show_assessment:
         risk_label_map = {
             "safe": "Niskie",
             "risky": "Podwyzszone",
@@ -272,6 +278,11 @@ with content_col:
         risk_label = risk_label_map.get(risk_level, risk_level)
         risk_description = build_risk_description(assessment_data, map_request)
         render_risk_note_prose(risk_level, risk_label, risk_description)
+    elif map_request["kind"] == "unresolved" and described_point.strip():
+        render_panel(
+            "Brak oceny",
+            "Wpisana lokalizacja nie nalezy do Tatr albo nie zostala rozpoznana, dlatego dashboard nie pokazuje oceny ryzyka ani wykresu.",
+        )
     else:
         render_panel(
             "Instrukcja",
@@ -419,7 +430,12 @@ with content_col:
 
     with chart_col:
         st.subheader("Wykres temperatury")
-        if not chart_series_frames and assessment_data:
+        if not show_assessment:
+            render_panel(
+                "Brak wykresu",
+                "Wykres nie jest wyswietlany, poniewaz wpisana lokalizacja nie nalezy do Tatr albo nie zostala rozpoznana.",
+            )
+        elif not chart_series_frames and assessment_data:
             matched_point_df = point_catalog_df.loc[
                 point_catalog_df["point_id"] == assessment_data["matched_point_id"]
             ]
@@ -441,7 +457,7 @@ with content_col:
                     )
                 )
 
-        if chart_series_frames:
+        if show_assessment and chart_series_frames:
             chart_df = pd.concat(chart_series_frames, ignore_index=True)
             chart_title = f"Przebieg temperatur w ciagu 24 godzin dla {build_route_label(map_request).lower()}"
             chart = (
@@ -481,7 +497,7 @@ with content_col:
             st.caption(
                 "Wykres pokazuje 24-godzinny przebieg temperatur dla startu, mety i punktow posrednich wyznaczonych na trasie."
             )
-        else:
+        elif show_assessment:
             render_panel(
                 "Brak wykresu",
                 "Po rozpoznaniu lokalizacji lub trasy dashboard pokaze tutaj przebieg temperatur w kolejnych godzinach.",

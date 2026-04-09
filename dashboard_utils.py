@@ -234,6 +234,26 @@ def configure_page(title: str) -> None:
             border-color: #c6d5d1 !important;
             color: #17313b !important;
         }
+        button[data-testid="StyledFullScreenButton"],
+        button[title="View fullscreen"],
+        details[data-testid="stActionMenu"] summary,
+        [data-testid="stElementToolbar"] button {
+            background: #fbfcfb !important;
+            color: #17313b !important;
+            border: 1px solid #d8e2df !important;
+            border-radius: 10px !important;
+            box-shadow: 0 6px 16px rgba(21, 43, 51, 0.06) !important;
+        }
+        details[data-testid="stActionMenu"] div[role="menu"],
+        [data-testid="stElementToolbar"] [role="menu"] {
+            background: #fbfcfb !important;
+            border: 1px solid #d8e2df !important;
+            box-shadow: 0 10px 24px rgba(21, 43, 51, 0.08) !important;
+        }
+        details[data-testid="stActionMenu"] div[role="menu"] *,
+        [data-testid="stElementToolbar"] [role="menu"] * {
+            color: #17313b !important;
+        }
         div[data-testid="stTextArea"] textarea {
             background: #fffdf7 !important;
             color: #17313b !important;
