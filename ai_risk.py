@@ -21,7 +21,7 @@ class RiskAssessmentResult(BaseModel):
     recommendation: Literal["safe", "risky", "dangerous"] = Field(
         description="Ocena ryzyka dla wskazanego punktu"
     )
-    justification: list[str] = Field(description="2-4 krotkie powody decyzji po polsku")
+    justification: list[str] = Field(description="3-5 konkretnych powodow decyzji po polsku, bardziej szczegolowych niz jedno zdanie")
 
 
 def get_ai_risk_client() -> OpenAI:
@@ -120,7 +120,9 @@ def assess_tatra_risk(
         "Jesli dostajesz opis lokalizacji, dopasowujesz najbardziej prawdopodobny punkt na podstawie "
         "opisu, polozenia wzgledem obszaru i najblizszego punktu odniesienia. "
         "Zwroc wylacznie ustrukturyzowana odpowiedz. Wszystkie pola tekstowe wypelnij po polsku. "
-        "Uzasadnienie ma byc krotkie, konkretne i zrozumiale dla uzytkownika dashboardu. "
+        "Uzasadnienie ma byc konkretne, zrozumiale dla uzytkownika dashboardu i bardziej szczegolowe. "
+        "Podaj 3-5 punktow opisujacych, jak przebieg temperatur w czasie wplywa na ryzyko na trasie lub w lokalizacji. "
+        "Odwoluj sie do spadkow temperatury, wartosci minimalnych i maksymalnych oraz potencjalnego dyskomfortu lub zagrozen dla turysty. "
         "W rekomendacji uzywaj tylko: safe, risky, dangerous."
     )
 

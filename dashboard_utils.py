@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import sqlite3
+import unicodedata
 from html import escape
 from io import BytesIO
 from pathlib import Path
@@ -13,7 +15,15 @@ import streamlit as st
 from folium import Element
 from folium.plugins import HeatMap
 
-from spatial_config import LAT_MAX, LAT_MIN, LON_MAX, LON_MIN, STATION_COORDINATES, is_inside_bounds
+from spatial_config import (
+    LAT_MAX,
+    LAT_MIN,
+    LON_MAX,
+    LON_MIN,
+    STATION_COORDINATES,
+    TATRA_PLACE_COORDINATES,
+    is_inside_bounds,
+)
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -68,8 +78,10 @@ def configure_page(title: str) -> None:
             display: none !important;
         }
         .block-container {
-            max-width: 1380px;
+            max-width: 100%;
             padding-top: 1.3rem;
+            padding-left: 1.4rem;
+            padding-right: 1.4rem;
             padding-bottom: 2rem;
         }
         h1, h2, h3, p, div, span, label {
@@ -219,6 +231,86 @@ def configure_page(title: str) -> None:
             background: #f7faf8 !important;
             border-color: #c6d5d1 !important;
             color: #17313b !important;
+        }
+        div[data-testid="stTextArea"] textarea {
+            background: #fffdf7 !important;
+            color: #17313b !important;
+            border: 1px solid #d7e2de !important;
+            border-radius: 14px !important;
+        }
+        div[data-testid="stTextArea"] textarea::placeholder {
+            color: #7a8f96 !important;
+        }
+        div[data-testid="stTextArea"] textarea:focus {
+            border-color: #bdd0ca !important;
+            box-shadow: 0 0 0 1px #bdd0ca !important;
+        }
+        div[data-testid="stButton"] > button {
+            background: #f7f3e8 !important;
+            color: #17313b !important;
+            border: 1px solid #d9d2be !important;
+            box-shadow: 0 8px 18px rgba(21, 43, 51, 0.06) !important;
+        }
+        div[data-testid="stButton"] > button:hover {
+            background: #f1eadb !important;
+            border-color: #cfc4aa !important;
+            color: #17313b !important;
+        }
+        .risk-note {
+            border-radius: 18px;
+            padding: 1rem 1.05rem;
+            border: 1px solid transparent;
+            box-shadow: 0 10px 24px rgba(21, 43, 51, 0.07);
+        }
+        .risk-note-level {
+            font-size: 0.76rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-weight: 700;
+            margin-bottom: 0.45rem;
+        }
+        .risk-note-title {
+            font-size: 1.18rem;
+            font-weight: 800;
+            margin-bottom: 0.45rem;
+        }
+        .risk-note-body {
+            font-size: 0.95rem;
+            line-height: 1.55;
+            color: #26414a;
+        }
+        .risk-note-list {
+            margin: 0.7rem 0 0;
+            padding-left: 1.15rem;
+            color: #26414a;
+        }
+        .risk-note-list li {
+            margin-bottom: 0.38rem;
+            line-height: 1.5;
+        }
+        .risk-note-safe {
+            background: #edf8f0;
+            border-color: #b9ddc2;
+        }
+        .risk-note-safe .risk-note-level,
+        .risk-note-safe .risk-note-title {
+            color: #1f6a36;
+        }
+        .risk-note-risky {
+            background: #fff4df;
+            border-color: #ebd19a;
+        }
+        .risk-note-risky .risk-note-level,
+        .risk-note-risky .risk-note-title {
+            color: #9a6110;
+        }
+        .risk-note-dangerous {
+            background: #fdecec;
+            border-color: #efb2b2;
+        }
+        .risk-note-dangerous .risk-note-level,
+        .risk-note-dangerous .risk-note-title {
+            color: #a33131;
         }
         </style>
         """,
@@ -434,6 +526,34 @@ def render_panel(title: str, body: str) -> None:
     )
 
 
+def render_risk_note(risk_level: str, title: str, body: str) -> None:
+    st.markdown(
+        f"""
+        <div class="risk-note risk-note-{escape(risk_level)}">
+            <div class="risk-note-level">Ocena ryzyka</div>
+            <div class="risk-note-title">{escape(title)}</div>
+            <div class="risk-note-body">{escape(body)}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_risk_note_detailed(risk_level: str, title: str, intro: str, details: list[str]) -> None:
+    details_html = "".join(f"<li>{escape(item)}</li>" for item in details if item)
+    st.markdown(
+        f"""
+        <div class="risk-note risk-note-{escape(risk_level)}">
+            <div class="risk-note-level">Ocena ryzyka</div>
+            <div class="risk-note-title">{escape(title)}</div>
+            <div class="risk-note-body">{escape(intro)}</div>
+            <ul class="risk-note-list">{details_html}</ul>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def get_bounds(df: pd.DataFrame) -> tuple[list[float], list[list[float]]]:
     if df.empty:
         center = [(LAT_MIN + LAT_MAX) / 2, (LON_MIN + LON_MAX) / 2]
@@ -476,6 +596,102 @@ def _get_band_label(ratio: float, *, low_label: str, middle_label: str, high_lab
     if ratio >= 2 / 3:
         return high_label
     return middle_label
+
+
+def _normalize_location_text(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value)
+    ascii_value = normalized.encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"\s+", " ", ascii_value.lower()).strip()
+
+
+def _extract_coordinate_pair(text: str) -> dict | None:
+    match = re.search(r"(-?\d{1,2}\.\d+)\s*[,;]\s*(-?\d{1,2}\.\d+)", text)
+    if not match:
+        return None
+
+    lat = float(match.group(1))
+    lon = float(match.group(2))
+    if not is_inside_bounds(lat, lon):
+        return None
+
+    return {
+        "label": f"{lat:.4f}, {lon:.4f}",
+        "lat": lat,
+        "lon": lon,
+        "source": "coordinates",
+    }
+
+
+def _resolve_named_place(text: str) -> dict | None:
+    normalized_text = _normalize_location_text(text)
+    if not normalized_text:
+        return None
+
+    best_match: tuple[int, str, dict] | None = None
+    for place_name, payload in TATRA_PLACE_COORDINATES.items():
+        aliases = payload.get("aliases", [])
+        for alias in aliases:
+            normalized_alias = _normalize_location_text(alias)
+            if normalized_alias == normalized_text:
+                return {
+                    "label": place_name,
+                    "lat": float(payload["lat"]),
+                    "lon": float(payload["lon"]),
+                    "source": "place_catalog",
+                }
+            if normalized_alias and normalized_alias in normalized_text:
+                score = len(normalized_alias)
+                if best_match is None or score > best_match[0]:
+                    best_match = (
+                        score,
+                        place_name,
+                        {
+                            "label": place_name,
+                            "lat": float(payload["lat"]),
+                            "lon": float(payload["lon"]),
+                            "source": "place_catalog",
+                        },
+                    )
+
+    return None if best_match is None else best_match[2]
+
+
+def _resolve_location_fragment(text: str) -> dict | None:
+    return _extract_coordinate_pair(text) or _resolve_named_place(text)
+
+
+def resolve_map_request(query: str) -> dict:
+    stripped_query = query.strip()
+    if not stripped_query:
+        return {"kind": "none", "points": []}
+
+    route_patterns = [
+        r"^\s*(.+?)\s*->\s*(.+?)\s*$",
+        r"^\s*(.+?)\s*[-–]\s*(.+?)\s*$",
+        r"^\s*(?:z|od)\s+(.+?)\s+do\s+(.+?)\s*$",
+    ]
+    for pattern in route_patterns:
+        match = re.match(pattern, stripped_query, flags=re.IGNORECASE)
+        if not match:
+            continue
+        start_label = match.group(1).strip()
+        end_label = match.group(2).strip()
+        start_point = _resolve_location_fragment(start_label)
+        end_point = _resolve_location_fragment(end_label)
+        if start_point and end_point:
+            return {
+                "kind": "route",
+                "points": [
+                    {**start_point, "role": "start", "input_label": start_label},
+                    {**end_point, "role": "end", "input_label": end_label},
+                ],
+            }
+
+    single_point = _resolve_location_fragment(stripped_query)
+    if single_point:
+        return {"kind": "point", "points": [{**single_point, "role": "point", "input_label": stripped_query}]}
+
+    return {"kind": "unresolved", "points": []}
 
 
 def _get_nearest_station_name(lat: float, lon: float) -> str:
