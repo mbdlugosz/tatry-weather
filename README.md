@@ -1,65 +1,58 @@
 # Dashboard pogodowy Tatry
 
-Projekt analityczno-aplikacyjny dla obszaru Tatr. Repozytorium laczy pobieranie danych pogodowych z API, zapis danych do plikow `CSV` i `JSON`, lokalna baze `SQLite`, notebooki analityczne oraz dashboard w `Streamlit`.
+Interaktywny dashboard pogodowy dla obszaru Tatr zbudowany w `Streamlit`. Projekt laczy dane historyczne, dane biezace, forecast temperatur oraz modul AI do oceny ryzyka dla wskazanej lokalizacji lub trasy.
 
-Najwazniejsza czescia projektu jest obecnie dashboard, ktory pozwala:
+## O projekcie
 
-- analizowac prognoze temperatur dla siatki punktow na obszarze Tatr,
-- oceniac ryzyko wyprawy dla wskazanej lokalizacji lub trasy,
-- wizualizowac trase i punkty siatki na mapie,
+Celem projektu jest polaczenie analizy danych pogodowych z praktycznym interfejsem, ktory pozwala:
+
+- monitorowac warunki pogodowe na obszarze Tatr,
 - przegladac dane historyczne i forecast,
+- analizowac punkty siatki pogodowej na mapie,
+- oceniac ryzyko wyprawy dla lokalizacji lub trasy,
 - eksportowac dane do dalszej analizy.
 
-## Funkcje
+Dashboard korzysta z najnowszego pliku forecast zapisanego w `data/json` i na jego podstawie buduje analize temperatur oraz ocene ryzyka.
 
-### 1. Dashboard Streamlit
+## Najwazniejsze funkcje
 
-Dashboard zawiera kilka widokow:
+- Ocena ryzyka AI dla lokalizacji i tras w Tatrach.
+- Rozpoznawanie miejsc i tras wpisywanych naturalnym jezykiem.
+- Obsluga literowek i roznych form zapisu nazw lokalizacji.
+- Wizualizacja trasy i punktow siatki prognozy na mapie.
+- 24-godzinny wykres temperatur dla analizowanych punktow trasy.
+- Widoki danych historycznych, forecastu i eksportu.
+- Lokalna baza `SQLite` dla danych pogodowych.
+
+## Jak dziala ocena ryzyka
+
+1. Aplikacja laduje najnowszy plik forecast z katalogu `data/json`.
+2. Uzytkownik wpisuje lokalizacje albo trase, np. `Morskie Oko` albo `z Zakopanego do Morskiego Oka`.
+3. System probuje rozpoznac miejsca nalezace do obszaru Tatr.
+4. Trasa jest mapowana na znane punkty i odcinki.
+5. Dla najblizszych punktow siatki forecast generowany jest 24-godzinny przebieg temperatur.
+6. Model AI zwraca ocene ryzyka i uzasadnienie po polsku.
+
+Jesli wpisana lokalizacja nie nalezy do Tatr albo nie zostanie rozpoznana, dashboard nie pokazuje oceny ryzyka ani wykresu.
+
+## Widoki dashboardu
 
 - `Ocena ryzyka`
 - `Dane historyczne`
 - `Prognoza pogody`
 - `Eksport danych`
 
-W module oceny ryzyka uzytkownik moze wpisac:
+## Tech Stack
 
-- pojedyncza lokalizacje, np. `Morskie Oko`,
-- trase, np. `z Zakopanego do Morskiego Oka`,
-- wpis z drobnymi literowkami lub odmieniona nazwa miejsca.
-
-Aplikacja:
-
-- rozpoznaje miejsca nalezace do obszaru Tatr,
-- wybiera najnowszy plik forecast z katalogu `data/json`,
-- dopasowuje punkty siatki prognozy do analizowanej lokalizacji lub trasy,
-- pokazuje trase na mapie,
-- generuje 24-godzinna ocene ryzyka przy pomocy modelu AI,
-- rysuje wykres temperatur dla punktow startowych, koncowych i posrednich.
-
-Jesli wpisana lokalizacja nie nalezy do Tatr albo nie zostanie rozpoznana, dashboard nie pokazuje oceny ryzyka ani wykresu.
-
-### 2. Dane historyczne
-
-Projekt pobiera dane historyczne dla wybranych stacji Meteostat i zapisuje je do pliku:
-
-- `data/weather_history_for_eda.csv`
-
-Te dane sa wykorzystywane glownie w notebookach i analizie eksploracyjnej.
-
-### 3. Dane biezace i forecast
-
-Projekt pobiera dane z OpenWeather dla siatki punktow w granicach zdefiniowanego obszaru Tatr:
-
-- dane biezace trafiaja do `data/weather_history.csv`,
-- forecast zapisywany jest do plikow `JSON` w `data/json/`.
-
-Rozdzielczosc siatki mozna kontrolowac parametrem `--grid-size`.
-
-### 4. SQLite
-
-Aktualne dane pogodowe moga byc importowane do lokalnej bazy:
-
-- `database/weather.db`
+- Python
+- Streamlit
+- Pandas
+- Folium
+- Altair
+- SQLite
+- OpenWeather API
+- Meteostat API
+- OpenAI SDK / OpenRouter
 
 ## Struktura projektu
 
@@ -90,24 +83,12 @@ tatry-weather/
 `-- uv.lock
 ```
 
-## Technologie
+## Uruchomienie lokalnie
 
-- Python 3.13+
-- Streamlit
-- Pandas
-- Folium
-- Altair
-- SQLite
-- OpenWeather API
-- Meteostat API przez RapidAPI
-- OpenRouter / OpenAI SDK do oceny ryzyka AI
-
-## Wymagania
+### Wymagania
 
 - Python `3.13+`
 - `uv`
-
-## Instalacja
 
 ### 1. Klonowanie repozytorium
 
@@ -124,7 +105,7 @@ uv sync
 
 ### 3. Konfiguracja `.env`
 
-Przyklad:
+Przykladowa konfiguracja:
 
 ```env
 RAPIDAPI_KEY=your_rapidapi_key
@@ -134,19 +115,11 @@ OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 AI_RISK_MODEL=gpt-4o-mini
 ```
 
-Minimalnie:
-
-- `RAPIDAPI_KEY` jest potrzebny do danych historycznych,
-- `OPENWEATHERAPI_KEY` jest potrzebny do danych biezacych i forecast,
-- `OPENROUTER_API_KEY` jest potrzebny do oceny ryzyka AI.
-
-## Uruchomienie dashboardu
+### 4. Uruchomienie dashboardu
 
 ```bash
 uv run streamlit run app.py
 ```
-
-Po uruchomieniu aplikacja przekierowuje domyslnie do strony `Ocena ryzyka`.
 
 ## Odswiezanie danych
 
@@ -168,67 +141,38 @@ uv run python scripts/api_refresh.py --mode current
 uv run python scripts/api_refresh.py --mode history
 ```
 
-### Wszystko naraz
+### Wszystkie dane
 
 ```bash
 uv run python scripts/api_refresh.py --mode all
 ```
 
-### Zmiana gestosci siatki
+### Zmiana gestosci siatki forecast
 
 ```bash
 uv run python scripts/api_refresh.py --mode forecast --grid-size 10
 ```
 
-Im wiekszy `grid-size`, tym wiecej punktow analizowanych na mapie i dokladniejsze dopasowanie lokalizacji do siatki forecast.
+Im wiekszy `grid-size`, tym wiecej punktow siatki i dokladniejsze dopasowanie lokalizacji do prognozy.
 
-### Import danych do SQLite
+## Screenshoty
 
-```bash
-uv run python scripts/api_refresh.py --mode current --import-to-db
+Mozesz dodac tutaj zrzuty ekranu z dashboardu, np.:
+
+```md
+![Ocena ryzyka](docs/screenshots/risk-dashboard.png)
+![Prognoza pogody](docs/screenshots/forecast-dashboard.png)
 ```
-
-Lub osobno:
-
-```bash
-uv run python scripts/import_weather_history.py
-```
-
-## Notebooki
-
-Notebooki mozna uruchomic przez:
-
-```bash
-uv run jupyter lab
-```
-
-Repozytorium zawiera m.in. materialy do:
-
-- analizy EDA,
-- eksperymentow z API,
-- testowania odpowiedzi AI dla oceny ryzyka.
-
-## Jak dziala ocena ryzyka
-
-1. Dashboard laduje najnowszy plik forecast z `data/json`.
-2. Uzytkownik wpisuje lokalizacje albo trase.
-3. System probuje rozpoznac punkty nalezace do Tatr.
-4. Dla rozpoznanej lokalizacji lub trasy wybierane sa najblizsze punkty siatki forecast.
-5. Model AI generuje ocene ryzyka: `safe`, `risky` albo `dangerous`.
-6. Wynik jest prezentowany jako opis po polsku wraz z mapa i wykresem temperatur dla 24 godzin.
 
 ## Ograniczenia
 
-- Routing trasy jest przyblizony i opiera sie na lokalnym grafie polaczen oraz szablonach tras, a nie na pelnym silniku szlakowym.
-- Ocena ryzyka korzysta z punktow siatki forecast, a nie z idealnie dowolnych wspolrzednych w terenie.
-- Jakosc oceny zalezy od aktualnosci danych API i gestosci siatki forecast.
+- Routing tras jest przyblizony i opiera sie na lokalnym grafie polaczen.
+- Ocena ryzyka korzysta z najblizszych punktow siatki forecast, a nie z pelnego modelu terenowego.
+- Jakosc wyniku zalezy od aktualnosci danych i gestosci siatki prognozy.
 
-## Rozwoj projektu
+## Dalszy rozwoj
 
-Planowane lub mozliwe dalsze rozszerzenia:
-
-- dodanie wag czasowych do odcinkow tras i wyboru najbardziej realistycznej trasy,
-- rozszerzenie katalogu punktow i tras tatrzanskich,
-- rozbudowa modelu ryzyka o wiecej parametrow pogodowych niz temperatura,
-- lepszy eksport danych i wynikow analiz,
-- dalsze dopracowanie warstwy prezentacyjnej dashboardu.
+- dodanie wag czasowych do odcinkow tras,
+- bardziej realistyczny routing tras tatrzanskich,
+- rozszerzenie modelu ryzyka o kolejne parametry pogodowe,
+- dalsze dopracowanie warstwy wizualnej dashboardu.
