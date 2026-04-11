@@ -58,14 +58,16 @@ Jesli wpisana lokalizacja nie nalezy do Tatr albo nie zostanie rozpoznana, dashb
 
 ```text
 tatry-weather/
+|-- .github/
+|   `-- workflows/
+|       `-- refresh-data.yml
+|-- assets/
+|   `-- grafika.png
 |-- app.py
 |-- ai_risk.py
 |-- dashboard_utils.py
 |-- dashboard_views.py
 |-- spatial_config.py
-|-- .github/
-|   `-- workflows/
-|       `-- refresh-data.yml
 |-- scripts/
 |   |-- api_refresh.py
 |   |-- cleanup_spatial_data.py

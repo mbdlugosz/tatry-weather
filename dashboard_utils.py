@@ -34,7 +34,7 @@ DATABASE_PATH = BASE_DIR / "database" / "weather.db"
 FORECAST_DIR = BASE_DIR / "data" / "json"
 WEATHER_HISTORY_CSV = BASE_DIR / "data" / "weather_history.csv"
 HISTORICAL_STATION_CSV = BASE_DIR / "data" / "weather_history_for_eda.csv"
-APP_HEADER_IMAGE = BASE_DIR / "grafika.png"
+APP_HEADER_IMAGE = BASE_DIR / "assets" / "grafika.png"
 
 HISTORICAL_LABELS = {
     "avg_temp": "Srednia temperatura",
