@@ -1,6 +1,6 @@
 # Dashboard pogodowy Tatry
 
-Prosty dashboard w `Streamlit`, ktory pokazuje pogode dla obszaru Tatr i pomaga ocenic warunki przed wyjsciem w gory.
+Interaktywny dashboard w Streamlit do wizualizacji prognozy pogody w Tatrach, wspomagający ocenę warunków górskich przed wyjściem na szlak.
 
 ## Co robi dashboard
 
