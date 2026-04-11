@@ -5,6 +5,7 @@ import math
 import re
 import sqlite3
 import unicodedata
+from base64 import b64encode
 from difflib import get_close_matches
 from difflib import SequenceMatcher
 from html import escape
@@ -33,6 +34,7 @@ DATABASE_PATH = BASE_DIR / "database" / "weather.db"
 FORECAST_DIR = BASE_DIR / "data" / "json"
 WEATHER_HISTORY_CSV = BASE_DIR / "data" / "weather_history.csv"
 HISTORICAL_STATION_CSV = BASE_DIR / "data" / "weather_history_for_eda.csv"
+APP_HEADER_IMAGE = BASE_DIR / "grafika.png"
 
 HISTORICAL_LABELS = {
     "avg_temp": "Srednia temperatura",
@@ -53,6 +55,13 @@ def get_file_signature(path: Path) -> tuple[bool, int, int]:
         return False, 0, 0
     stat = path.stat()
     return True, stat.st_mtime_ns, stat.st_size
+
+
+def _get_header_image_data_uri() -> str | None:
+    if not APP_HEADER_IMAGE.exists():
+        return None
+    encoded = b64encode(APP_HEADER_IMAGE.read_bytes()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
 
 
 def configure_page(title: str) -> None:
@@ -154,6 +163,22 @@ def configure_page(title: str) -> None:
             color: #17313b;
             margin-bottom: 0.7rem;
         }
+        .app-header {
+            display: flex;
+            align-items: center;
+            gap: 1.15rem;
+            margin-bottom: 0.95rem;
+        }
+        .app-header-image {
+            width: 164px;
+            max-width: 100%;
+            height: auto;
+            display: block;
+            flex: 0 0 auto;
+        }
+        .app-header-copy {
+            min-width: 0;
+        }
         .app-title {
             font-size: 1.9rem;
             font-weight: 800;
@@ -167,6 +192,15 @@ def configure_page(title: str) -> None:
             line-height: 1.5;
             margin-bottom: 0.95rem;
             max-width: 900px;
+        }
+        @media (max-width: 768px) {
+            .app-header {
+                align-items: flex-start;
+                gap: 0.9rem;
+            }
+            .app-header-image {
+                width: 120px;
+            }
         }
         div[data-baseweb="select"] > div {
             background: #fffef9 !important;
@@ -483,8 +517,23 @@ def render_hero(title: str, description: str) -> None:
 
 
 def render_app_header(description: str) -> None:
-    st.title("Dashboard pogodowy Tatry")
-    st.markdown(f'<div class="app-subtitle">{description}</div>', unsafe_allow_html=True)
+    image_markup = ""
+    image_data_uri = _get_header_image_data_uri()
+    if image_data_uri:
+        image_markup = f'<img src="{image_data_uri}" alt="Grafika dashboardu Tatry" class="app-header-image" />'
+
+    st.markdown(
+        f"""
+        <div class="app-header">
+            {image_markup}
+            <div class="app-header-copy">
+                <div class="app-title">Dashboard pogodowy Tatry</div>
+                <div class="app-subtitle">{description}</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_top_nav(active_page: str) -> None:
