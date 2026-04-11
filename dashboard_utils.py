@@ -82,10 +82,15 @@ def configure_page(title: str) -> None:
         [data-testid="stSidebarCollapsedControl"] {
             display: none;
         }
+        [data-testid="collapsedControl"] {
+            display: none !important;
+        }
         button[aria-label="Open sidebar"],
         button[title="Open sidebar"],
         button[aria-label="Close sidebar"],
-        button[title="Close sidebar"] {
+        button[title="Close sidebar"],
+        button[kind="header"],
+        header button {
             display: none !important;
         }
         .block-container {
@@ -164,42 +169,91 @@ def configure_page(title: str) -> None:
             margin-bottom: 0.7rem;
         }
         .app-header {
+            margin-bottom: 1rem;
+        }
+        .app-header-main {
             display: flex;
             align-items: center;
-            gap: 1.15rem;
-            margin-bottom: 0.95rem;
+            gap: 1.3rem;
+            margin-bottom: 0.55rem;
         }
         .app-header-image {
-            width: 164px;
+            width: 186px;
             max-width: 100%;
             height: auto;
             display: block;
             flex: 0 0 auto;
+            filter: blur(0.6px);
+            transform: scale(1.03);
+            transform-origin: center;
         }
         .app-header-copy {
             min-width: 0;
         }
         .app-title {
-            font-size: 1.9rem;
+            font-size: 2.1rem;
             font-weight: 800;
             color: #17313b;
             line-height: 1.1;
-            margin-bottom: 0.35rem;
+            margin-bottom: 0;
         }
         .app-subtitle {
             color: #5a7178;
-            font-size: 0.98rem;
+            font-size: 1rem;
             line-height: 1.5;
-            margin-bottom: 0.95rem;
+            margin-bottom: 0;
             max-width: 900px;
         }
+        .top-nav {
+            margin-bottom: 1rem;
+        }
+        .top-nav [data-testid="stPageLink"],
+        .top-nav a[data-testid="stPageLink-NavLink"] {
+            border: 1px solid #d8e2df !important;
+            border-radius: 16px !important;
+            background: #fbfcfb !important;
+            box-shadow: 0 8px 18px rgba(21, 43, 51, 0.05) !important;
+            padding: 0.25rem 0.35rem !important;
+        }
+        .top-nav [data-testid="stPageLink"]:hover,
+        .top-nav a[data-testid="stPageLink-NavLink"]:hover {
+            border-color: #c1d2cd !important;
+            background: #f7faf8 !important;
+        }
+        .top-nav-active {
+            border: 1px solid #b8cfc8;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #dfeee8, #eef6f3);
+            box-shadow: 0 10px 22px rgba(21, 43, 51, 0.08);
+            padding: 0.75rem 0.85rem;
+            min-height: 72px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .top-nav-active-label {
+            font-size: 0.96rem;
+            font-weight: 700;
+            color: #17313b;
+            line-height: 1.2;
+        }
+        .top-nav-active-state {
+            margin-top: 0.28rem;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #58706f;
+        }
         @media (max-width: 768px) {
-            .app-header {
+            .app-header-main {
                 align-items: flex-start;
                 gap: 0.9rem;
             }
             .app-header-image {
-                width: 120px;
+                width: 132px;
+            }
+            .app-title {
+                font-size: 1.85rem;
             }
         }
         div[data-baseweb="select"] > div {
@@ -525,11 +579,13 @@ def render_app_header(description: str) -> None:
     st.markdown(
         f"""
         <div class="app-header">
-            {image_markup}
-            <div class="app-header-copy">
-                <div class="app-title">Dashboard pogodowy Tatry</div>
-                <div class="app-subtitle">{description}</div>
+            <div class="app-header-main">
+                {image_markup}
+                <div class="app-header-copy">
+                    <div class="app-title">Dashboard pogodowy Tatry</div>
+                </div>
             </div>
+            <div class="app-subtitle">{description}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -537,42 +593,36 @@ def render_app_header(description: str) -> None:
 
 
 def render_top_nav(active_page: str) -> None:
-    st.markdown('<div class="top-nav-label">Nawigacja</div>', unsafe_allow_html=True)
+    st.markdown('<div class="top-nav"><div class="top-nav-label">Nawigacja</div>', unsafe_allow_html=True)
     risk_col, history_col, forecast_col, export_col = st.columns(4)
 
     with risk_col:
-        st.page_link(
-            "pages/0_Ocena_ryzyka.py",
-            label="Ocena ryzyka",
-            icon=":material/warning:",
-            disabled=active_page == "risk",
-            use_container_width=True,
-        )
+        _render_nav_item("risk", active_page, "Ocena ryzyka")
 
     with history_col:
-        st.page_link(
-            "pages/1_Dane_historyczne.py",
-            label="Dane historyczne",
-            icon=":material/stacked_line_chart:",
-            disabled=active_page == "history",
-            use_container_width=True,
-        )
+        _render_nav_item("history", active_page, "Dane historyczne")
     with forecast_col:
-        st.page_link(
-            "pages/2_Prognoza_pogody.py",
-            label="Prognoza pogody",
-            icon=":material/cloud:",
-            disabled=active_page == "forecast",
-            use_container_width=True,
-        )
+        _render_nav_item("forecast", active_page, "Prognoza pogody")
     with export_col:
-        st.page_link(
-            "pages/3_Eksport_danych.py",
-            label="Eksport danych",
-            icon=":material/download:",
-            disabled=active_page == "export",
-            use_container_width=True,
+        _render_nav_item("export", active_page, "Eksport danych")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def _render_nav_item(key: str, active_page: str, label: str) -> None:
+    if active_page == key:
+        st.markdown(
+            f"""
+            <div class="top-nav-active">
+                <div class="top-nav-active-label">{escape(label)}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
+        return
+
+    if st.button(label, key=f"nav-{key}", use_container_width=True):
+        st.session_state["active_view"] = key
+        st.rerun()
 
 
 def render_card_title(title: str) -> None:

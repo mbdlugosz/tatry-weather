@@ -221,7 +221,7 @@ filtered_df = forecast_df[forecast_df["forecast_time"] == analysis_start_time].c
 if "risk_assessment_result" not in st.session_state:
     st.session_state["risk_assessment_result"] = None
 
-input_col, content_col = st.columns([0.9, 2.7], vertical_alignment="top")
+input_col, content_col = st.columns([0.78, 2.82], vertical_alignment="top")
 
 with input_col:
     with st.container(border=True):
